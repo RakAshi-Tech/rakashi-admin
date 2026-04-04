@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import DriverActions from '@/components/DriverActions'
+import DriverPhotoGallery from '@/components/DriverPhotoGallery'
 
 type Params = { id: string }
 
@@ -24,8 +25,8 @@ async function getDeliveries(driverId: string) {
       .from('gps_delivery_summary')
       .select('*')
       .eq('driver_id', driverId)
-      .order('created_at', { ascending: false })
-      .limit(20)
+      .not('completed_at', 'is', null)
+      .order('completed_at', { ascending: false })
     return data ?? []
   } catch {
     return []
@@ -57,6 +58,20 @@ async function getPenalties(driverId: string) {
       .eq('driver_id', driverId)
       .order('created_at', { ascending: false })
       .limit(10)
+    return data ?? []
+  } catch {
+    return []
+  }
+}
+
+async function getShifts(driverId: string) {
+  try {
+    const { data } = await supabase
+      .from('driver_shifts')
+      .select('*')
+      .eq('driver_id', driverId)
+      .order('shift_date', { ascending: false })
+      .limit(30)
     return data ?? []
   } catch {
     return []
@@ -104,11 +119,12 @@ const penaltyColors: Record<string, string> = {
 
 export default async function DriverDetailPage({ params }: { params: Promise<Params> }) {
   const { id } = await params
-  const [driver, deliveries, chartDeliveries, penalties] = await Promise.all([
+  const [driver, deliveries, chartDeliveries, penalties, shifts] = await Promise.all([
     getDriver(id),
     getDeliveries(id),
     getRecentDeliveryChart(id),
     getPenalties(id),
+    getShifts(id),
   ])
 
   if (!driver) notFound()
@@ -117,6 +133,24 @@ export default async function DriverDetailPage({ params }: { params: Promise<Par
   const rank = getTrustRank(score)
   const chartData = buildChartData(chartDeliveries)
   const maxCount = Math.max(...chartData.map((d) => d.count), 1)
+
+  // Earnings calculations
+  const totalEarnings = deliveries.reduce((sum: number, d: { earnings_inr?: number | null }) => sum + (d.earnings_inr ?? 0), 0)
+  const startOfMonth = new Date()
+  startOfMonth.setDate(1)
+  startOfMonth.setHours(0, 0, 0, 0)
+  const monthlyEarnings = deliveries
+    .filter((d: { completed_at?: string | null }) => d.completed_at && new Date(d.completed_at) >= startOfMonth)
+    .reduce((sum: number, d: { earnings_inr?: number | null }) => sum + (d.earnings_inr ?? 0), 0)
+
+  // Photos
+  const photosWithUrl = deliveries
+    .filter((d: { photo_url?: string | null }) => d.photo_url)
+    .map((d: { id: string; photo_url: string | null; completed_at: string | null }) => ({
+      id: d.id,
+      photo_url: d.photo_url,
+      completed_at: d.completed_at,
+    }))
 
   const cardStyle: React.CSSProperties = {
     background: '#1a1a2e',
@@ -192,6 +226,7 @@ export default async function DriverDetailPage({ params }: { params: Promise<Par
         </div>
       </div>
 
+      {/* Stats Row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '20px' }}>
         {/* TrustScore */}
         <div style={cardStyle}>
@@ -224,6 +259,24 @@ export default async function DriverDetailPage({ params }: { params: Promise<Par
         </div>
       </div>
 
+      {/* Earnings Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+        <div style={{ ...cardStyle, borderLeft: '3px solid #f97316' }}>
+          <div style={{ color: '#9ca3af', fontSize: '12px', marginBottom: '8px' }}>総収益</div>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: '#f97316' }}>
+            ₹{totalEarnings.toLocaleString()}
+          </div>
+          <div style={{ color: '#9ca3af', fontSize: '11px', marginTop: '4px' }}>全期間累計</div>
+        </div>
+        <div style={{ ...cardStyle, borderLeft: '3px solid #16a34a' }}>
+          <div style={{ color: '#9ca3af', fontSize: '12px', marginBottom: '8px' }}>今月の収益</div>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: '#16a34a' }}>
+            ₹{monthlyEarnings.toLocaleString()}
+          </div>
+          <div style={{ color: '#9ca3af', fontSize: '11px', marginTop: '4px' }}>今月累計</div>
+        </div>
+      </div>
+
       {/* Delivery Chart */}
       <div style={{ ...cardStyle, marginBottom: '20px' }}>
         <h2 style={{ margin: '0 0 20px', fontSize: '16px', fontWeight: 600 }}>配送実績（直近30日）</h2>
@@ -251,6 +304,55 @@ export default async function DriverDetailPage({ params }: { params: Promise<Par
         </div>
       </div>
 
+      {/* Photo Gallery */}
+      <DriverPhotoGallery photos={photosWithUrl} />
+
+      {/* Shift History */}
+      <div style={{ ...cardStyle, marginBottom: '20px' }}>
+        <h2 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 600 }}>稼働履歴（直近30件）</h2>
+        {shifts.length === 0 ? (
+          <p style={{ color: '#9ca3af', textAlign: 'center', padding: '20px 0', margin: 0 }}>稼働履歴がありません</p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #2a2a4a' }}>
+                  {['日付', '配送数', '収益', '距離 (km)', '稼働時間 (分)'].map((h) => (
+                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#9ca3af', fontWeight: 500 }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {shifts.map((s: {
+                  id: string
+                  shift_date: string | null
+                  total_deliveries?: number | null
+                  total_earnings_inr?: number | null
+                  total_distance_km?: number | null
+                  total_duration_min?: number | null
+                }) => (
+                  <tr key={s.id} style={{ borderBottom: '1px solid #1e1e38' }}>
+                    <td style={{ padding: '8px 12px' }}>
+                      {s.shift_date ? new Date(s.shift_date).toLocaleDateString('ja-JP') : '-'}
+                    </td>
+                    <td style={{ padding: '8px 12px' }}>{s.total_deliveries ?? '-'}</td>
+                    <td style={{ padding: '8px 12px', color: '#16a34a' }}>
+                      {s.total_earnings_inr != null ? `₹${s.total_earnings_inr.toLocaleString()}` : '-'}
+                    </td>
+                    <td style={{ padding: '8px 12px' }}>
+                      {s.total_distance_km != null ? s.total_distance_km.toFixed(1) : '-'}
+                    </td>
+                    <td style={{ padding: '8px 12px' }}>{s.total_duration_min ?? '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
         {/* Delivery History */}
         <div style={cardStyle}>
@@ -259,34 +361,56 @@ export default async function DriverDetailPage({ params }: { params: Promise<Par
             <p style={{ color: '#9ca3af', textAlign: 'center', padding: '20px 0' }}>配送履歴がありません</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {deliveries.map((d) => (
+              {deliveries.map((d: {
+                id: string
+                job_id?: string | null
+                started_at?: string | null
+                completed_at?: string | null
+                total_duration_min?: number | null
+                earnings_inr?: number | null
+                photo_url?: string | null
+              }) => (
                 <div
                   key={d.id}
                   style={{
                     padding: '10px 12px',
                     background: '#0f0f1a',
                     borderRadius: '8px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
                   }}
                 >
-                  <div>
-                    <div style={{ fontSize: '12px', fontWeight: 500 }}>Job: {d.job_id ?? '-'}</div>
-                    <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '2px' }}>
-                      {d.started_at ? new Date(d.started_at).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: 500 }}>Job: {d.job_id ?? '-'}</div>
+                      <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '2px' }}>
+                        {d.completed_at
+                          ? new Date(d.completed_at).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                          : '-'}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ color: '#16a34a', fontSize: '11px' }}>✅ 完了</span>
+                      {d.total_duration_min != null && (
+                        <div style={{ color: '#9ca3af', fontSize: '11px', marginTop: '2px' }}>
+                          {d.total_duration_min}分
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    {d.completed_at ? (
-                      <span style={{ color: '#16a34a', fontSize: '11px' }}>✅ 完了</span>
-                    ) : (
-                      <span style={{ color: '#d97706', fontSize: '11px' }}>⏳ 進行中</span>
-                    )}
-                    {d.total_duration_min != null && (
-                      <div style={{ color: '#9ca3af', fontSize: '11px', marginTop: '2px' }}>
-                        {d.total_duration_min}分
-                      </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
+                    <span style={{ color: '#f97316', fontSize: '11px', fontWeight: 600 }}>
+                      {d.earnings_inr != null ? `₹${d.earnings_inr.toLocaleString()}` : '-'}
+                    </span>
+                    {d.photo_url && (
+                      <img
+                        src={d.photo_url}
+                        alt="delivery"
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          objectFit: 'cover',
+                          borderRadius: '4px',
+                        }}
+                      />
                     )}
                   </div>
                 </div>
@@ -302,7 +426,12 @@ export default async function DriverDetailPage({ params }: { params: Promise<Par
             <p style={{ color: '#9ca3af', textAlign: 'center', padding: '20px 0' }}>ペナルティ履歴がありません</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {penalties.map((p) => {
+              {penalties.map((p: {
+                id: string
+                type: string
+                created_at: string
+                message?: string | null
+              }) => {
                 const color = penaltyColors[p.type] ?? '#9ca3af'
                 return (
                   <div

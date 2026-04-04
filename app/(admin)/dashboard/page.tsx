@@ -2,34 +2,46 @@ import { supabase } from '@/lib/supabase'
 
 async function getDashboardStats() {
   try {
+    const startOfMonth = new Date()
+    startOfMonth.setDate(1)
+    startOfMonth.setHours(0, 0, 0, 0)
+
     const [
       { count: totalDrivers },
       { count: activeDrivers },
       { count: frozenDrivers },
       { count: monthlyDeliveries },
+      { data: earningsData },
     ] = await Promise.all([
       supabase.from('driver_profiles').select('*', { count: 'exact', head: true }),
       supabase.from('driver_profiles').select('*', { count: 'exact', head: true }).eq('is_active', true),
       supabase.from('driver_profiles').select('*', { count: 'exact', head: true }).eq('is_active', false),
-      (() => {
-        const startOfMonth = new Date()
-        startOfMonth.setDate(1)
-        startOfMonth.setHours(0, 0, 0, 0)
-        return supabase
-          .from('gps_delivery_summary')
-          .select('*', { count: 'exact', head: true })
-          .gte('completed_at', startOfMonth.toISOString())
-          .not('completed_at', 'is', null)
-      })(),
+      supabase
+        .from('gps_delivery_summary')
+        .select('*', { count: 'exact', head: true })
+        .gte('completed_at', startOfMonth.toISOString())
+        .not('completed_at', 'is', null),
+      supabase
+        .from('gps_delivery_summary')
+        .select('earnings_inr')
+        .gte('completed_at', startOfMonth.toISOString())
+        .not('completed_at', 'is', null),
     ])
+
+    const monthlyEarnings = (earningsData ?? []).reduce(
+      (sum: number, row: { earnings_inr?: number | null }) => sum + (row.earnings_inr ?? 0),
+      0
+    )
+
     return {
       totalDrivers: totalDrivers ?? 0,
       activeDrivers: activeDrivers ?? 0,
       frozenDrivers: frozenDrivers ?? 0,
       monthlyDeliveries: monthlyDeliveries ?? 0,
+      monthlyEarnings,
     }
   } catch {
-    return { totalDrivers: 0, activeDrivers: 0, frozenDrivers: 0, monthlyDeliveries: 0 }
+    return { totalDrivers: 0, activeDrivers: 0, frozenDrivers: 0, monthlyDeliveries: 0, monthlyEarnings: 0 }
   }
 }
 
@@ -54,7 +66,7 @@ function StatCard({
   sub,
 }: {
   title: string
-  value: number
+  value: number | string
   icon: string
   color: string
   sub?: string
@@ -74,7 +86,9 @@ function StatCard({
         <span style={{ color: '#9ca3af', fontSize: '13px' }}>{title}</span>
         <span style={{ fontSize: '22px' }}>{icon}</span>
       </div>
-      <div style={{ fontSize: '32px', fontWeight: 700, color, marginBottom: '4px' }}>{value.toLocaleString()}</div>
+      <div style={{ fontSize: '32px', fontWeight: 700, color, marginBottom: '4px' }}>
+        {typeof value === 'number' ? value.toLocaleString() : value}
+      </div>
       {sub && <div style={{ color: '#9ca3af', fontSize: '12px' }}>{sub}</div>}
     </div>
   )
@@ -89,6 +103,7 @@ function getTrustRank(score: number) {
 
 export default async function DashboardPage() {
   const [stats, recentDrivers] = await Promise.all([getDashboardStats(), getRecentDrivers()])
+  const { monthlyEarnings } = stats
 
   return (
     <div>
@@ -103,6 +118,7 @@ export default async function DashboardPage() {
         <StatCard title="アクティブ" value={stats.activeDrivers} icon="✅" color="#16a34a" sub="稼働中" />
         <StatCard title="凍結中" value={stats.frozenDrivers} icon="🔒" color="#dc2626" sub="要対応" />
         <StatCard title="今月の配送数" value={stats.monthlyDeliveries} icon="📦" color="#f97316" sub="今月累計" />
+        <StatCard title="今月の収益合計" value={`₹${monthlyEarnings.toLocaleString()}`} icon="💰" color="#16a34a" sub="今月累計" />
       </div>
 
       {/* Recent Drivers */}
