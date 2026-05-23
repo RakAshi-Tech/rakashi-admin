@@ -54,7 +54,7 @@ export default async function DeliveriesPage() {
                 </td>
               </tr>
             ) : (
-              deliveries.map((d) => (
+              deliveries.map((d: any) => (
                 <tr key={d.id} style={{ borderBottom: '1px solid #1e1e38' }}>
                   <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: '12px', color: '#f97316' }}>
                     {d.job_id ?? '-'}

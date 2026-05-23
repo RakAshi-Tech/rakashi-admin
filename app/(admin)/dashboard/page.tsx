@@ -163,7 +163,7 @@ export default async function DashboardPage() {
                 </td>
               </tr>
             ) : (
-              recentDrivers.map((driver) => {
+              recentDrivers.map((driver: any) => {
                 const rank = getTrustRank(driver.trust_score ?? 0)
                 return (
                   <tr key={driver.id} style={{ borderBottom: '1px solid #1e1e38' }}>

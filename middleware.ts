@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server'
 
 const PROTECTED_PATHS = ['/dashboard', '/drivers', '/deliveries', '/penalties', '/reports', '/settings']
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const token = request.cookies.get('admin_token')
 

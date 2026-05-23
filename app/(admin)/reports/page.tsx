@@ -33,12 +33,12 @@ async function getReportData() {
     const avgScore = d.length > 0 ? Math.round(totalScore / d.length) : 0
     const avgDuration =
       del.length > 0
-        ? Math.round(del.reduce((s, x) => s + (x.total_duration_min ?? 0), 0) / del.length)
+        ? Math.round(del.reduce((s: number, x: any) => s + (x.total_duration_min ?? 0), 0) / del.length)
         : 0
 
     return {
       totalDrivers: d.length,
-      activeDrivers: d.filter((x) => x.is_active).length,
+      activeDrivers: d.filter((x: any) => x.is_active).length,
       avgScore,
       totalDeliveries: del.length,
       avgDuration,

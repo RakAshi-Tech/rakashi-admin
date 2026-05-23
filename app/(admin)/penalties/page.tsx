@@ -102,7 +102,7 @@ export default async function PenaltiesPage() {
                 </td>
               </tr>
             ) : (
-              penalties.map((p) => {
+              penalties.map((p: any) => {
                 const color = penaltyColors[p.type] ?? '#9ca3af'
                 return (
                   <tr key={p.id} style={{ borderBottom: '1px solid #1e1e38' }}>
