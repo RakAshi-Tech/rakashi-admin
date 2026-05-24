@@ -29,7 +29,7 @@ async function getDashboardStats() {
     ])
 
     const monthlyEarnings = (earningsData ?? []).reduce(
-      (sum: number, row: { earnings_inr?: number | null }) => sum + (row.earnings_inr ?? 0),
+      (sum: number, row: { earnings_inr?: number | string | null }) => sum + Number(row.earnings_inr ?? 0),
       0
     )
 

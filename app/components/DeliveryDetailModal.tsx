@@ -187,17 +187,17 @@ export const DeliveryDetailModal = ({ delivery, onClose }: Props) => {
           {[
             {
               label: '走行距離',
-              value: `${(delivery.total_distance_km || 0).toFixed(1)} km`,
+              value: `${Number(delivery.total_distance_km || 0).toFixed(1)} km`,
               color: '#ffffff',
             },
             {
               label: '所要時間',
-              value: `${delivery.total_duration_min || 0} 分`,
+              value: `${Number(delivery.total_duration_min || 0)} 分`,
               color: '#ffffff',
             },
             {
               label: '収益',
-              value: `₹${(delivery.earnings_inr || 0).toLocaleString()}`,
+              value: `₹${Number(delivery.earnings_inr || 0).toLocaleString()}`,
               color: '#16a34a',
             },
             {

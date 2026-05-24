@@ -135,14 +135,14 @@ export default async function DriverDetailPage({ params }: { params: Promise<Par
   const chartData = buildChartData(chartDeliveries)
   const maxCount = Math.max(...chartData.map((d) => d.count), 1)
 
-  // Earnings calculations
-  const totalEarnings = deliveries.reduce((sum: number, d: { earnings_inr?: number | null }) => sum + (d.earnings_inr ?? 0), 0)
+  // Earnings calculations (NUMERIC from pg comes back as string → Number() to convert)
+  const totalEarnings = deliveries.reduce((sum: number, d: { earnings_inr?: number | string | null }) => sum + Number(d.earnings_inr ?? 0), 0)
   const startOfMonth = new Date()
   startOfMonth.setDate(1)
   startOfMonth.setHours(0, 0, 0, 0)
   const monthlyEarnings = deliveries
     .filter((d: { completed_at?: string | null }) => d.completed_at && new Date(d.completed_at) >= startOfMonth)
-    .reduce((sum: number, d: { earnings_inr?: number | null }) => sum + (d.earnings_inr ?? 0), 0)
+    .reduce((sum: number, d: { earnings_inr?: number | string | null }) => sum + Number(d.earnings_inr ?? 0), 0)
 
   // Photos
   const photosWithUrl = deliveries
@@ -340,10 +340,10 @@ export default async function DriverDetailPage({ params }: { params: Promise<Par
                     </td>
                     <td style={{ padding: '8px 12px' }}>{s.total_deliveries ?? '-'}</td>
                     <td style={{ padding: '8px 12px', color: '#16a34a' }}>
-                      {s.total_earnings_inr != null ? `₹${s.total_earnings_inr.toLocaleString()}` : '-'}
+                      {s.total_earnings_inr != null ? `₹${Number(s.total_earnings_inr).toLocaleString()}` : '-'}
                     </td>
                     <td style={{ padding: '8px 12px' }}>
-                      {s.total_distance_km != null ? s.total_distance_km.toFixed(1) : '-'}
+                      {s.total_distance_km != null ? Number(s.total_distance_km).toFixed(1) : '-'}
                     </td>
                     <td style={{ padding: '8px 12px' }}>{s.total_duration_min ?? '-'}</td>
                   </tr>
